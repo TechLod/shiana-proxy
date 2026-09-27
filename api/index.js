@@ -1,48 +1,37 @@
 export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', '*');
+  res.setHeader('Access-Control-Allow-Headers', '*');
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
   try {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', '*');
+    const SUPABASE_URL = 'https://halnoikqqjiggbkutff.supabase.co';
     
-    if (req.method === 'OPTIONS') {
-      return res.status(200).end();
-    }
+    // Test if we can fetch Supabase at all
+    const test = await fetch(SUPABASE_URL + '/rest/v1/', {
+      headers: { apikey: 'test' }
+    }).then(r => r.text()).catch(e => 'FETCH_ERROR: ' + e.message + ' cause: ' + JSON.stringify(e.cause));
 
-    // Get path after /api
+    // Try main proxy
     let path = req.url || '/';
-    // Remove /api prefix if present
-    if (path.startsWith('/api')) {
-      path = path.replace('/api', '') || '/';
-    }
-    if (!path.startsWith('/')) path = '/' + path;
-
-    const targetUrl = 'https://halnoikqqjiggbkutff.supabase.co' + path;
+    if (path.startsWith('/api')) path = path.replace('/api','');
+    const targetUrl = SUPABASE_URL + path;
     
     const headers = {};
     if (req.headers['apikey']) headers['apikey'] = req.headers['apikey'];
     if (req.headers['authorization']) headers['authorization'] = req.headers['authorization'];
-    if (req.headers['content-type']) headers['Content-Type'] = req.headers['content-type'];
-    else headers['Content-Type'] = 'application/json';
+    headers['Content-Type'] = 'application/json';
 
-    const options = {
-      method: req.method,
-      headers: headers,
-    };
-
-    if (req.method !== 'GET' && req.method !== 'HEAD' && req.body) {
-      options.body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
-    }
-
-    const response = await fetch(targetUrl, options);
-    const data = await response.text();
+    const r = await fetch(targetUrl, { method: req.method, headers });
+    const t = await r.text();
     
-    res.status(response.status);
-    // Copy content type
-    const ct = response.headers.get('content-type');
-    if (ct) res.setHeader('Content-Type', ct);
-    return res.send(data);
+    res.status(r.status).send(t + '\n\n---TEST---\n' + test);
     
   } catch (err) {
-    return res.status(500).json({ error: err.message, stack: err.stack });
+    res.status(500).json({ 
+      error: err.message, 
+      cause: err.cause ? err.cause.message : 'no cause',
+      full: err.toString()
+    });
   }
 }
